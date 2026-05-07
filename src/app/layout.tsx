@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Providers } from "@/app/providers";
 import { pretendard } from "@/styles/font";
 import "./globals.css";
 
@@ -17,7 +18,9 @@ export default function RootLayout({
       <body
         className={`${pretendard.className} h-full min-h-screen w-full overflow-auto text-black`}
       >
-        <main className="flex-1">{children}</main>
+        <Providers>
+          <main className="flex-1">{children}</main>
+        </Providers>
       </body>
     </html>
   );
