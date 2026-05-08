@@ -5,19 +5,22 @@ export type WeatherCoordinate = {
 
 export type HourlyTemperature = {
   time: string;
-  temperature: number;
+  temperature: number | null;
 };
 
 export type WeatherForecast = {
   currentTemperature: number | null;
   minTemperature: number | null;
   maxTemperature: number | null;
+  weatherCode: number | null;
+  weatherDescription: string;
   hourlyTemperatures: HourlyTemperature[];
 };
 
 export type WeatherForecastResponse = {
   current?: {
     temperature_2m?: number;
+    weather_code?: number;
   };
   daily?: {
     temperature_2m_min?: number[];

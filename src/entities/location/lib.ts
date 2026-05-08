@@ -3,7 +3,15 @@ import type { District } from "./types";
 
 const DISTRICT_SEPARATOR = "-";
 
-export const districts = koreaDistricts.map(parseDistrict);
+export const districts = Array.from(
+  new Map(
+    koreaDistricts.map((district) => {
+      const parsedDistrict = parseDistrict(district);
+
+      return [parsedDistrict.code, parsedDistrict];
+    }),
+  ).values(),
+);
 
 export function parseDistrict(value: string): District {
   const [province, city, town] = value
