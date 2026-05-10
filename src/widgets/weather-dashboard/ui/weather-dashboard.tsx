@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MAX_FAVORITE_COUNT,
   useFavoriteStore,
@@ -9,6 +9,7 @@ import {
 } from "@/entities/favorite";
 import { formatDistrictName, type District } from "@/entities/location";
 import { useWeatherQuery } from "@/entities/weather";
+import { useCurrentLocation } from "@/features/current-location";
 import { useLocationSearch } from "@/features/location-search";
 import { getLocationCoordinate, type LocationCoordinate } from "@/shared/api";
 import { GlassCard } from "@/shared/ui";
@@ -40,10 +41,15 @@ const hourlyItemVariants = {
 
 export function WeatherDashboard() {
   const [selectedLocation, setSelectedLocation] = useState(DEFAULT_LOCATION);
+  const [isCurrentLocationSelected, setIsCurrentLocationSelected] =
+    useState(false);
+  const [hasSelectedLocationManually, setHasSelectedLocationManually] =
+    useState(false);
   const [coordinate, setCoordinate] =
     useState<LocationCoordinate>(DEFAULT_COORDINATE);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isResolvingLocation, setIsResolvingLocation] = useState(false);
+  const currentLocation = useCurrentLocation();
   const { keyword, setKeyword, results } = useLocationSearch();
   const weatherQuery = useWeatherQuery(coordinate);
   const favorites = useFavoriteStore((state) => state.favorites);
@@ -57,13 +63,30 @@ export function WeatherDashboard() {
   const visibleResults = useMemo(() => results.slice(0, 8), [results]);
   const selectedLocationName = selectedLocation.replaceAll("-", " ");
   const canAddFavorite =
+    !isCurrentLocationSelected &&
     !isFavorite(selectedLocation) && favorites.length < MAX_FAVORITE_COUNT;
+
+  useEffect(() => {
+    if (!currentLocation.coordinate || hasSelectedLocationManually) {
+      return;
+    }
+
+    setCoordinate(currentLocation.coordinate);
+    setSelectedLocation(currentLocation.location?.name ?? "현재 위치");
+    setIsCurrentLocationSelected(true);
+  }, [
+    currentLocation.coordinate,
+    currentLocation.location?.name,
+    hasSelectedLocationManually,
+  ]);
 
   const handleSelectLocation = async (district: District) => {
     const location = district.code;
 
     setKeyword("");
     setSelectedLocation(location);
+    setIsCurrentLocationSelected(false);
+    setHasSelectedLocationManually(true);
     setLocationError(null);
     setIsResolvingLocation(true);
 
@@ -82,6 +105,8 @@ export function WeatherDashboard() {
 
   const handleSelectFavorite = async (favorite: FavoriteLocation) => {
     setSelectedLocation(favorite.location);
+    setIsCurrentLocationSelected(false);
+    setHasSelectedLocationManually(true);
     setLocationError(null);
     setIsResolvingLocation(true);
 
@@ -98,6 +123,12 @@ export function WeatherDashboard() {
 
   const handleAddFavorite = () => {
     addFavorite({ location: selectedLocation });
+  };
+
+  const handleUseCurrentLocation = () => {
+    setHasSelectedLocationManually(false);
+    setLocationError(null);
+    currentLocation.requestCurrentLocation();
   };
 
   const handleEditAlias = (favorite: FavoriteLocation) => {
@@ -122,6 +153,9 @@ export function WeatherDashboard() {
           onKeywordChange={setKeyword}
           results={visibleResults}
           onSelectLocation={handleSelectLocation}
+          isCurrentLocationLoading={currentLocation.isLoading}
+          currentLocationError={currentLocation.error?.message ?? null}
+          onUseCurrentLocation={handleUseCurrentLocation}
         />
 
         <motion.div
@@ -131,7 +165,11 @@ export function WeatherDashboard() {
         >
           <CurrentWeatherCard
             locationName={selectedLocationName}
-            isLoading={weatherQuery.isLoading || isResolvingLocation}
+            isLoading={
+              weatherQuery.isLoading ||
+              isResolvingLocation ||
+              currentLocation.isLoading
+            }
             errorMessage={
               locationError ??
               (weatherQuery.isError ? "날씨 정보를 불러오지 못했어요." : null)
@@ -167,6 +205,9 @@ type LocationSearchProps = {
   onKeywordChange: (keyword: string) => void;
   results: District[];
   onSelectLocation: (district: District) => void;
+  isCurrentLocationLoading: boolean;
+  currentLocationError: string | null;
+  onUseCurrentLocation: () => void;
 };
 
 function LocationSearch({
@@ -174,6 +215,9 @@ function LocationSearch({
   onKeywordChange,
   results,
   onSelectLocation,
+  isCurrentLocationLoading,
+  currentLocationError,
+  onUseCurrentLocation,
 }: LocationSearchProps) {
   const isOpen = keyword.trim().length > 0;
 
@@ -191,6 +235,23 @@ function LocationSearch({
         className="h-14 w-full rounded-3xl border border-white/25 bg-white/20 px-5 text-[15px] text-white shadow-[0_12px_36px_rgba(21,34,75,0.14)] outline-none backdrop-blur-2xl transition placeholder:text-white/65 focus:border-white/55 focus:bg-white/25"
       />
 
+      <div className="mt-3 flex items-center gap-2 px-1">
+        <button
+          type="button"
+          onClick={onUseCurrentLocation}
+          disabled={isCurrentLocationLoading}
+          aria-label="현재 위치 날씨 조회"
+          className="h-10 rounded-full border border-white/20 bg-white/15 px-4 text-xs font-semibold text-white transition hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/35 disabled:cursor-wait disabled:opacity-60"
+        >
+          {isCurrentLocationLoading ? "현재 위치 확인 중" : "현재 위치 사용"}
+        </button>
+        {currentLocationError ? (
+          <p className="min-w-0 flex-1 truncate text-xs text-white/65">
+            {currentLocationError}
+          </p>
+        ) : null}
+      </div>
+
       <AnimatePresence>
         {isOpen ? (
           <motion.div
@@ -198,7 +259,7 @@ function LocationSearch({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="absolute left-0 right-0 top-16 z-20 max-h-72 overflow-y-auto rounded-3xl border border-white/25 bg-[#14234b]/70 p-2 shadow-2xl backdrop-blur-2xl"
+            className="absolute left-0 right-0 top-28 z-20 max-h-72 overflow-y-auto rounded-3xl border border-white/25 bg-[#14234b]/70 p-2 shadow-2xl backdrop-blur-2xl"
           >
             {results.length > 0 ? (
               results.map((district) => (

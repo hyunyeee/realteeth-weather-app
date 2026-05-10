@@ -3,14 +3,41 @@ import { ApiError } from "./api-client";
 
 type GeocodingApiResponse = {
   results?: Array<{
+    name?: string;
+    admin1?: string;
+    admin2?: string;
+    admin3?: string;
+    admin4?: string;
     latitude: number;
     longitude: number;
   }>;
 };
 
+type ReverseGeocodingApiResponse = {
+  display_name?: string;
+  address?: {
+    city?: string;
+    state?: string;
+    borough?: string;
+    county?: string;
+    city_district?: string;
+    town?: string;
+    village?: string;
+    suburb?: string;
+    quarter?: string;
+    neighbourhood?: string;
+    name?: string;
+  };
+};
+
 export type LocationCoordinate = {
   lat: number;
   lon: number;
+};
+
+export type CurrentLocationAddress = {
+  name: string;
+  coordinate: LocationCoordinate;
 };
 
 export async function getLocationCoordinate(
@@ -56,6 +83,64 @@ export async function getLocationCoordinate(
   };
 }
 
+export async function getCurrentLocationAddress(
+  coordinate: LocationCoordinate,
+): Promise<CurrentLocationAddress> {
+  const url = new URL("https://nominatim.openstreetmap.org/reverse");
+
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("lat", String(coordinate.lat));
+  url.searchParams.set("lon", String(coordinate.lon));
+  url.searchParams.set("accept-language", "ko");
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  const data = (await response.json()) as ReverseGeocodingApiResponse;
+
+  if (!response.ok) {
+    throw new ApiError(
+      `Failed to fetch current location address: ${response.status}`,
+      response.status,
+      data,
+    );
+  }
+
+  return {
+    coordinate,
+    name: formatCurrentLocationAddress(data) || formatCoordinate(coordinate),
+  };
+}
+
 function normalizeLocationKeyword(location: string) {
   return location.replaceAll("-", " ").replace(/\s+/g, " ").trim();
+}
+
+function formatCurrentLocationAddress(location: ReverseGeocodingApiResponse) {
+  const addressParts = location.address;
+
+  if (!addressParts) {
+    return location.display_name?.split(",").slice(0, 3).join(" ").trim();
+  }
+
+  const address = [
+    addressParts.state ?? addressParts.city,
+    addressParts.borough ?? addressParts.county ?? addressParts.city_district,
+    addressParts.town ??
+      addressParts.village ??
+      addressParts.suburb ??
+      addressParts.quarter ??
+      addressParts.neighbourhood,
+  ]
+    .filter(Boolean)
+    .filter((part, index, parts) => parts.indexOf(part) === index)
+    .join(" ");
+
+  return address || location.display_name?.split(",").slice(0, 3).join(" ").trim();
+}
+
+function formatCoordinate({ lat, lon }: LocationCoordinate) {
+  return `현재 위치 ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
