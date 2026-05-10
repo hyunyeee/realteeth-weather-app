@@ -30,6 +30,11 @@ type ReverseGeocodingApiResponse = {
   };
 };
 
+type NominatimSearchResponse = Array<{
+  lat: string;
+  lon: string;
+}>;
+
 export type LocationCoordinate = {
   lat: number;
   lon: number;
@@ -73,14 +78,14 @@ export async function getLocationCoordinate(
 
   const [result] = data.results ?? [];
 
-  if (!result) {
-    throw new Error(`Location coordinate not found: ${location}`);
+  if (result) {
+    return {
+      lat: result.latitude,
+      lon: result.longitude,
+    };
   }
 
-  return {
-    lat: result.latitude,
-    lon: result.longitude,
-  };
+  return getNominatimLocationCoordinate(keyword, location);
 }
 
 export async function getCurrentLocationAddress(
@@ -116,6 +121,45 @@ export async function getCurrentLocationAddress(
 
 function normalizeLocationKeyword(location: string) {
   return location.replaceAll("-", " ").replace(/\s+/g, " ").trim();
+}
+
+async function getNominatimLocationCoordinate(
+  keyword: string,
+  originalLocation: string,
+): Promise<LocationCoordinate> {
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("q", keyword);
+  url.searchParams.set("countrycodes", "kr");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("accept-language", "ko");
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  const data = (await response.json()) as NominatimSearchResponse;
+
+  if (!response.ok) {
+    throw new ApiError(
+      `Failed to fetch location coordinate: ${response.status}`,
+      response.status,
+      data,
+    );
+  }
+
+  const [result] = data;
+
+  if (!result) {
+    throw new Error(`Location coordinate not found: ${originalLocation}`);
+  }
+
+  return {
+    lat: Number(result.lat),
+    lon: Number(result.lon),
+  };
 }
 
 function formatCurrentLocationAddress(location: ReverseGeocodingApiResponse) {
