@@ -12,7 +12,7 @@ import { useWeatherQuery } from "@/entities/weather";
 import { useCurrentLocation } from "@/features/current-location";
 import { useLocationSearch } from "@/features/location-search";
 import { getLocationCoordinate, type LocationCoordinate } from "@/shared/api";
-import { GlassCard } from "@/shared/ui";
+import { GlassCard, WeatherGlyph } from "@/shared/ui";
 
 const DEFAULT_LOCATION = "서울특별시-종로구-청운동";
 const DEFAULT_COORDINATE = {
@@ -176,6 +176,7 @@ export function WeatherDashboard() {
             }
             temperature={weatherQuery.data?.currentTemperature ?? null}
             description={weatherQuery.data?.weatherDescription ?? "현재 날씨"}
+            weatherCode={weatherQuery.data?.weatherCode ?? null}
             minTemperature={weatherQuery.data?.minTemperature ?? null}
             maxTemperature={weatherQuery.data?.maxTemperature ?? null}
             canAddFavorite={canAddFavorite}
@@ -288,6 +289,7 @@ type CurrentWeatherCardProps = {
   errorMessage: string | null;
   temperature: number | null;
   description: string;
+  weatherCode: number | null;
   minTemperature: number | null;
   maxTemperature: number | null;
   canAddFavorite: boolean;
@@ -300,6 +302,7 @@ function CurrentWeatherCard({
   errorMessage,
   temperature,
   description,
+  weatherCode,
   minTemperature,
   maxTemperature,
   canAddFavorite,
@@ -319,6 +322,14 @@ function CurrentWeatherCard({
           <p className="py-8 text-base text-white/75">{errorMessage}</p>
         ) : (
           <>
+            <motion.div
+              initial={{ opacity: 0, y: 8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="-mb-2 mt-1"
+            >
+              <WeatherGlyph code={weatherCode} />
+            </motion.div>
             <p className="text-[88px] font-light leading-none tracking-normal text-white sm:text-8xl">
               {formatTemperature(temperature)}
             </p>
